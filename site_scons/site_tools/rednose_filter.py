@@ -1,4 +1,5 @@
 import platform
+import sys
 
 import eigen
 from SCons.Script import Dir, File
@@ -9,8 +10,10 @@ def compile_single_filter(env, target, filter_gen_script, output_dir, extra_gen_
   extra_generated_files = [File(f'{output_dir}/{x}') for x in extra_gen_artifacts]
   generator_file = File(filter_gen_script)
 
+  # SCons runs commands through cmd.exe on Windows, which cannot start a script by its shebang
+  python = f'"{sys.executable}" ' if platform.system() == "Windows" else ""
   env.Command(generated_src_files + extra_generated_files,
-              [generator_file] + script_deps, f"{File(generator_file).relpath} {target} {Dir(output_dir).relpath}")
+              [generator_file] + script_deps, f"{python}{File(generator_file).relpath} {target} {Dir(output_dir).relpath}")
 
   generated_cc_file = File(generated_src_files[:1])
 

@@ -1,10 +1,12 @@
 import os
 import platform
 import subprocess
+import sys
 import sysconfig
 import numpy as np
 import eigen
 
+WINDOWS = platform.system() == "Windows"
 arch = subprocess.check_output(["uname", "-m"], encoding='utf8').rstrip()
 
 common = ''
@@ -38,7 +40,9 @@ env = Environment(
   CXXFLAGS="-std=c++1z",
   CPPPATH=cpppath,
   REDNOSE_ROOT=Dir("#").abspath,
-  tools=["default", "cython", "rednose_filter"],
+  tools=["mingw" if WINDOWS else "default", "cython", "rednose_filter"],  # the default tool picks MSVC on Windows
+  # the mingw tool assumes gcc and drops the lib prefix ekf_load expects; static libc++ so the DLLs load outside the MSYS2 shell
+  **({"CC": "clang", "CXX": "clang++", "SHLIBPREFIX": "lib", "LINKFLAGS": ["-static"]} if WINDOWS else {}),
 )
 
 # Cython build enviroment
@@ -48,6 +52,14 @@ envCython["CCFLAGS"] += ["-Wno-#warnings", "-Wno-cpp", "-Wno-shadow", "-Wno-depr
 envCython["LIBS"] = []
 if platform.system() == "Darwin":
   envCython["LINKFLAGS"] = ["-bundle", "-undefined", "dynamic_lookup"]
+elif WINDOWS:
+  envCython["LINKFLAGS"] = ["-shared", "-static"]
+  envCython["LIBPATH"] = [os.path.join(sys.base_prefix, "libs")]
+  envCython["LIBS"] = [f"python{sys.version_info.major}{sys.version_info.minor}"]
+  # extension modules are .pyd on Windows; the SConscript names them .so
+  def _pyd_emitter(target, source, env):
+    return [env.File(str(t)[:-3] + ".pyd") if str(t).endswith(".so") else t for t in target], source
+  envCython.Append(PROGEMITTER=[_pyd_emitter])
 elif arch == "aarch64":
   envCython["LINKFLAGS"] = ["-shared"]
   envCython["LIBS"] = [os.path.basename(python_path)]
