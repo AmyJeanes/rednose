@@ -4,10 +4,26 @@ on: [push, pull_request]
 
 jobs:
   test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+        include:
+          - os: ubuntu-latest
+          - os: macos-latest
+          - os: windows-latest
+            shell: msys2 {0}
+    defaults:
+      run:
+        shell: ${{ matrix.shell || 'bash -e {0}' }}
     steps:
     - uses: actions/checkout@v7
+    - uses: msys2/setup-msys2@v2
+      if: runner.os == 'Windows'
+      with:
+        msystem: CLANG64
+        path-type: inherit  # uv and Git for Windows stay visible
+        install: mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-dlfcn  # clang for scons, dlopen for the filters
+    - uses: astral-sh/setup-uv@v5
+      if: runner.os == 'Windows'
     - run: ./test.sh
